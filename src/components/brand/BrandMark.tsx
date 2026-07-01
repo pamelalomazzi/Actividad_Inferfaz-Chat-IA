@@ -15,31 +15,18 @@ export function BrandMark({ compact = false }: BrandMarkProps) {
           xmlns="http://www.w3.org/2000/svg"
         >
           <path
-            d="M16 46V18L32 35L48 18V46"
+            d="M20 46V18H35C41.6274 18 47 23.3726 47 30C47 36.6274 41.6274 42 35 42H20"
             stroke="currentColor"
             strokeWidth="6"
             strokeLinecap="round"
             strokeLinejoin="round"
-          />
-          <path
-            d="M24 46V31"
-            stroke="currentColor"
-            strokeWidth="6"
-            strokeLinecap="round"
-          />
-          <path
-            d="M40 46V31"
-            stroke="currentColor"
-            strokeWidth="6"
-            strokeLinecap="round"
           />
         </svg>
       </div>
 
       {compact ? null : (
         <div>
-          <p className="text-[11px] uppercase tracking-[0.28em] text-lime-300">Neon Nocturne</p>
-          <h1 className="text-xl font-semibold tracking-tight text-white">Nocturne AI</h1>
+          <h1 className="text-[11px] uppercase tracking-[0.28em] text-lime-300">Chateando con Pame</h1>
         </div>
       )}
     </div>

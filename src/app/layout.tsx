@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nocturne AI",
-  description: "Interfaz de chat Neon Nocturne impulsada por Groq y Llama 3.",
+  title: "Chateando con Pame",
+  description: "Interfaz de chat Chateando con Pame impulsada por Groq y Llama 3.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

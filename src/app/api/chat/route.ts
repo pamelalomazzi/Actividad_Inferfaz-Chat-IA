@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 type InputMessage = {
   role: "user" | "assistant" | "system";
@@ -18,8 +20,83 @@ type GroqResponse = {
   };
 };
 
+type ProviderError = {
+  message?: string;
+};
+
+type ProviderResponse = GroqResponse & {
+  error?: ProviderError;
+};
+
+type ProviderDocument = {
+  source: {
+    text: string;
+  };
+};
+
+type ProviderPayload = {
+  model: string;
+  messages: InputMessage[];
+  temperature: number;
+  documents?: ProviderDocument[];
+};
+
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const DEFAULT_MODEL = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
+const KNOWLEDGE_FILE_PATH = path.join(process.cwd(), "conocimiento", "conocimiento.txt");
+
+const PAMELA_SYSTEM_INSTRUCTIONS = `
+Sos una asistente conversacional para "Chateando con Pame".
+
+Comportamiento esperado:
+- Responde preguntas generales con claridad.
+- Si el usuario pregunta por datos personales o biograficos de Pamela, responde en primera persona como Pamela.
+- Usa un tono natural, uruguayo, cercano y calido.
+
+Reglas:
+- Usa unicamente informacion confirmada en el documento de conocimiento adjunto.
+- No inventes datos personales ni completes huecos con suposiciones.
+- Si falta un dato, dilo con honestidad y redirige la conversacion de forma amable.
+`.trim();
+
+let knowledgeCache: string | null = null;
+let knowledgePromise: Promise<string> | null = null;
+
+async function getKnowledgeText(): Promise<string> {
+  if (knowledgeCache) {
+    return knowledgeCache;
+  }
+
+  if (!knowledgePromise) {
+    knowledgePromise = readFile(KNOWLEDGE_FILE_PATH, "utf8").then((content) => {
+      knowledgeCache = content.trim();
+      return knowledgeCache;
+    });
+  }
+
+  return knowledgePromise;
+}
+
+async function callProvider(apiKey: string, body: ProviderPayload) {
+  return fetch(GROQ_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+function shouldRetryWithoutDocuments(errorMessage: string): boolean {
+  const normalized = errorMessage.toLowerCase();
+  return (
+    normalized.includes("documents") ||
+    normalized.includes("unknown") ||
+    normalized.includes("unexpected") ||
+    normalized.includes("additional properties")
+  );
+}
 
 export async function POST(request: NextRequest) {
   const apiKey = process.env.GROQ_API_KEY;
@@ -47,7 +124,7 @@ export async function POST(request: NextRequest) {
   const sanitizedMessages = messages
     .filter(
       (message) =>
-        (message.role === "user" || message.role === "assistant" || message.role === "system") &&
+        (message.role === "user" || message.role === "assistant") &&
         typeof message.content === "string" &&
         message.content.trim().length > 0,
     )
@@ -61,31 +138,62 @@ export async function POST(request: NextRequest) {
   }
 
   const startedAt = Date.now();
+  let knowledgeText: string;
 
   try {
-    const groqResponse = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+    knowledgeText = await getKnowledgeText();
+  } catch {
+    return NextResponse.json(
+      { error: "No se pudo cargar el archivo de conocimiento." },
+      { status: 500 },
+    );
+  }
+
+  const messagesWithContext: InputMessage[] = [
+    {
+      role: "system",
+      content: `${PAMELA_SYSTEM_INSTRUCTIONS}\n\nDocumento de conocimiento:\n${knowledgeText}`,
+    },
+    ...sanitizedMessages,
+  ];
+
+  const payloadWithDocuments: ProviderPayload = {
+    model: DEFAULT_MODEL,
+    messages: messagesWithContext,
+    temperature: 0.7,
+    documents: [
+      {
+        source: {
+          text: knowledgeText,
+        },
       },
-      body: JSON.stringify({
-        model: DEFAULT_MODEL,
-        messages: sanitizedMessages,
-        temperature: 0.7,
-      }),
-    });
+    ],
+  };
 
-    const data = (await groqResponse.json()) as GroqResponse & { error?: { message?: string } };
+  try {
+    let providerResponse = await callProvider(apiKey, payloadWithDocuments);
+    let data = (await providerResponse.json()) as ProviderResponse;
 
-    if (!groqResponse.ok) {
+    if (!providerResponse.ok) {
+      const providerErrorMessage = data.error?.message || "";
+      if (shouldRetryWithoutDocuments(providerErrorMessage)) {
+        providerResponse = await callProvider(apiKey, {
+          model: DEFAULT_MODEL,
+          messages: messagesWithContext,
+          temperature: 0.7,
+        });
+        data = (await providerResponse.json()) as ProviderResponse;
+      }
+    }
+
+    if (!providerResponse.ok) {
       return NextResponse.json(
         {
           error:
             data.error?.message ||
             "Groq devolvio un error al procesar la solicitud.",
         },
-        { status: groqResponse.status },
+        { status: providerResponse.status },
       );
     }
 
