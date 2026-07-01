@@ -15,16 +15,31 @@ type ChatApiResponse = {
 };
 
 type PersistedSession = {
-  messages: ChatMessage[];
-  lastUsage: Usage;
-  cumulativeUsage: Usage;
+  sessions?: ChatSession[];
+  activeSessionId?: string;
+
+  // Legacy fields (single-session format)
+  messages?: ChatMessage[];
+  lastUsage?: Usage;
+  cumulativeUsage?: Usage;
   usage?: Usage;
-  latencyMs: number | null;
-  model: string;
+  latencyMs?: number | null;
+  model?: string;
   language?: Language;
 };
 
 type Language = "es" | "en";
+
+type ChatSession = {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  lastUsage: Usage;
+  cumulativeUsage: Usage;
+  latencyMs: number | null;
+  model: string;
+  updatedAt: number;
+};
 
 const COPY: Record<
   Language,
@@ -55,7 +70,6 @@ const COPY: Record<
     settingsTitle: string;
     themeLabel: string;
     providerLabel: string;
-    sessions: string[];
   }
 > = {
   es: {
@@ -85,7 +99,6 @@ const COPY: Record<
     settingsTitle: "Ajustes",
     themeLabel: "tema",
     providerLabel: "proveedor",
-    sessions: ["Planificacion sprint", "Depuracion API", "Ajuste de prompts", "Build nocturno"],
   },
   en: {
     bootMessage: "Session started. Ready to respond using Groq and Llama 3.",
@@ -114,7 +127,6 @@ const COPY: Record<
     settingsTitle: "Settings",
     themeLabel: "theme",
     providerLabel: "provider",
-    sessions: ["Sprint planning", "API debug", "Prompt tuning", "Night build"],
   },
 };
 
@@ -140,6 +152,80 @@ function bootMessage(language: Language): ChatMessage {
   };
 }
 
+function defaultSessionTitle(language: Language): string {
+  return language === "es" ? "Nueva charla" : "New chat";
+}
+
+function buildSessionTitle(content: string, language: Language): string {
+  const compact = content.replace(/\s+/g, " ").trim();
+  if (compact.length === 0) {
+    return defaultSessionTitle(language);
+  }
+
+  return compact.length > 36 ? `${compact.slice(0, 33)}...` : compact;
+}
+
+function normalizeUsage(value: Partial<Usage> | undefined): Usage {
+  return {
+    prompt_tokens: Number(value?.prompt_tokens ?? 0),
+    completion_tokens: Number(value?.completion_tokens ?? 0),
+    total_tokens: Number(value?.total_tokens ?? 0),
+  };
+}
+
+function normalizeMessages(messages: unknown): ChatMessage[] {
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+
+  return messages.filter(
+    (item): item is ChatMessage =>
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as ChatMessage).id === "string" &&
+      ((item as ChatMessage).role === "user" || (item as ChatMessage).role === "assistant") &&
+      typeof (item as ChatMessage).content === "string" &&
+      typeof (item as ChatMessage).time === "string",
+  );
+}
+
+function createSession(language: Language): ChatSession {
+  return {
+    id: crypto.randomUUID(),
+    title: defaultSessionTitle(language),
+    messages: [bootMessage(language)],
+    lastUsage: { ...ZERO_USAGE },
+    cumulativeUsage: { ...ZERO_USAGE },
+    latencyMs: null,
+    model: DEFAULT_MODEL,
+    updatedAt: Date.now(),
+  };
+}
+
+function normalizeSession(raw: unknown, language: Language): ChatSession | null {
+  if (typeof raw !== "object" || raw === null) {
+    return null;
+  }
+
+  const source = raw as Partial<ChatSession>;
+  const safeMessages = normalizeMessages(source.messages);
+  const fallback = createSession(language);
+
+  return {
+    id: typeof source.id === "string" ? source.id : fallback.id,
+    title:
+      typeof source.title === "string" && source.title.trim().length > 0
+        ? source.title
+        : defaultSessionTitle(language),
+    messages: safeMessages.length > 0 ? safeMessages : fallback.messages,
+    lastUsage: normalizeUsage(source.lastUsage),
+    cumulativeUsage: normalizeUsage(source.cumulativeUsage),
+    latencyMs: typeof source.latencyMs === "number" ? source.latencyMs : null,
+    model: typeof source.model === "string" && source.model.length > 0 ? source.model : DEFAULT_MODEL,
+    updatedAt: typeof source.updatedAt === "number" ? source.updatedAt : Date.now(),
+  };
+}
+
 function addUsage(current: Usage, incoming: Usage): Usage {
   return {
     prompt_tokens: current.prompt_tokens + incoming.prompt_tokens,
@@ -150,14 +236,11 @@ function addUsage(current: Usage, incoming: Usage): Usage {
 
 export default function Home() {
   const [language, setLanguage] = useState<Language>("es");
-  const [messages, setMessages] = useState<ChatMessage[]>([bootMessage("es")]);
+  const [sessions, setSessions] = useState<ChatSession[]>([createSession("es")]);
+  const [activeSessionId, setActiveSessionId] = useState<string>(sessions[0].id);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastUsage, setLastUsage] = useState<Usage>(ZERO_USAGE);
-  const [cumulativeUsage, setCumulativeUsage] = useState<Usage>(ZERO_USAGE);
-  const [latencyMs, setLatencyMs] = useState<number | null>(null);
-  const [model, setModel] = useState(DEFAULT_MODEL);
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -167,37 +250,40 @@ export default function Home() {
 
     try {
       const parsed = JSON.parse(raw) as PersistedSession;
-      const restoredMessages = Array.isArray(parsed.messages)
-        ? parsed.messages.filter(
-            (item) =>
-              typeof item.id === "string" &&
-              (item.role === "user" || item.role === "assistant") &&
-              typeof item.content === "string" &&
-              typeof item.time === "string",
-          )
-        : [];
-
-      const restoredLastUsage = parsed.lastUsage ?? ZERO_USAGE;
-      const restoredCumulativeUsage = parsed.cumulativeUsage ?? parsed.lastUsage ?? parsed.usage ?? ZERO_USAGE;
       const restoredLanguage = parsed.language === "en" ? "en" : "es";
+
+      let restoredSessions: ChatSession[] = [];
+      if (Array.isArray(parsed.sessions)) {
+        restoredSessions = parsed.sessions
+          .map((session) => normalizeSession(session, restoredLanguage))
+          .filter((session): session is ChatSession => session !== null);
+      }
+
+      if (restoredSessions.length === 0) {
+        const migratedMessages = normalizeMessages(parsed.messages);
+        const migratedSession: ChatSession = {
+          id: crypto.randomUUID(),
+          title: defaultSessionTitle(restoredLanguage),
+          messages: migratedMessages.length > 0 ? migratedMessages : [bootMessage(restoredLanguage)],
+          lastUsage: normalizeUsage(parsed.lastUsage),
+          cumulativeUsage: normalizeUsage(parsed.cumulativeUsage ?? parsed.lastUsage ?? parsed.usage),
+          latencyMs: typeof parsed.latencyMs === "number" ? parsed.latencyMs : null,
+          model: typeof parsed.model === "string" && parsed.model.length > 0 ? parsed.model : DEFAULT_MODEL,
+          updatedAt: Date.now(),
+        };
+        restoredSessions = [migratedSession];
+      }
+
+      const restoredActiveSessionId =
+        typeof parsed.activeSessionId === "string" &&
+        restoredSessions.some((session) => session.id === parsed.activeSessionId)
+          ? parsed.activeSessionId
+          : restoredSessions[0].id;
 
       const frame = requestAnimationFrame(() => {
         setLanguage(restoredLanguage);
-        setMessages(restoredMessages.length > 0 ? restoredMessages : [bootMessage(restoredLanguage)]);
-
-        setLastUsage({
-          prompt_tokens: Number(restoredLastUsage.prompt_tokens ?? 0),
-          completion_tokens: Number(restoredLastUsage.completion_tokens ?? 0),
-          total_tokens: Number(restoredLastUsage.total_tokens ?? 0),
-        });
-
-        setCumulativeUsage({
-          prompt_tokens: Number(restoredCumulativeUsage.prompt_tokens ?? 0),
-          completion_tokens: Number(restoredCumulativeUsage.completion_tokens ?? 0),
-          total_tokens: Number(restoredCumulativeUsage.total_tokens ?? 0),
-        });
-        setLatencyMs(typeof parsed.latencyMs === "number" ? parsed.latencyMs : null);
-        setModel(typeof parsed.model === "string" ? parsed.model : DEFAULT_MODEL);
+        setSessions(restoredSessions);
+        setActiveSessionId(restoredActiveSessionId);
       });
 
       return () => cancelAnimationFrame(frame);
@@ -207,18 +293,21 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const payload: PersistedSession = {
-      messages,
-      lastUsage,
-      cumulativeUsage,
-      latencyMs,
-      model,
+    const payload = {
+      sessions,
+      activeSessionId,
       language,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [cumulativeUsage, language, lastUsage, latencyMs, messages, model]);
+  }, [activeSessionId, language, sessions]);
 
   const copy = COPY[language];
+  const activeSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0];
+  const messages = activeSession?.messages ?? [];
+  const lastUsage = activeSession?.lastUsage ?? ZERO_USAGE;
+  const cumulativeUsage = activeSession?.cumulativeUsage ?? ZERO_USAGE;
+  const latencyMs = activeSession?.latencyMs ?? null;
+  const model = activeSession?.model ?? DEFAULT_MODEL;
 
   const metrics: MetricCard[] = useMemo(
     () => [
@@ -290,10 +379,11 @@ export default function Home() {
 
   async function handleSendMessage(): Promise<void> {
     const trimmed = input.trim();
-    if (!trimmed || isLoading) {
+    if (!trimmed || isLoading || !activeSession) {
       return;
     }
 
+    const targetSessionId = activeSession.id;
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
@@ -301,8 +391,22 @@ export default function Home() {
       time: nowTime(),
     };
 
-    const nextMessages = [...messages, userMessage];
-    setMessages(nextMessages);
+    const nextMessages = [...activeSession.messages, userMessage];
+    const hasUserMessages = activeSession.messages.some((message) => message.role === "user");
+    const nextTitle = hasUserMessages ? activeSession.title : buildSessionTitle(trimmed, language);
+
+    setSessions((prev) =>
+      prev.map((session) =>
+        session.id === targetSessionId
+          ? {
+              ...session,
+              title: nextTitle,
+              messages: nextMessages,
+              updatedAt: Date.now(),
+            }
+          : session,
+      ),
+    );
     setInput("");
     setError(null);
     setIsLoading(true);
@@ -328,26 +432,40 @@ export default function Home() {
         throw new Error(payload.error || "No se pudo obtener respuesta de Groq.");
       }
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: assistantReply,
-          time: nowTime(),
-        },
-      ]);
+      setSessions((prev) =>
+        prev.map((session) => {
+          if (session.id !== targetSessionId) {
+            return session;
+          }
 
-      const usageFromPayload = payload.usage;
-      if (usageFromPayload) {
-        setLastUsage(usageFromPayload);
-        setCumulativeUsage((prev) => addUsage(prev, usageFromPayload));
-      }
+          const nextSession: ChatSession = {
+            ...session,
+            messages: [
+              ...session.messages,
+              {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                content: assistantReply,
+                time: nowTime(),
+              },
+            ],
+            latencyMs:
+              typeof payload.latencyMs === "number" ? payload.latencyMs : Date.now() - startedAt,
+            model:
+              typeof payload.model === "string" && payload.model.length > 0
+                ? payload.model
+                : session.model,
+            updatedAt: Date.now(),
+          };
 
-      setLatencyMs(typeof payload.latencyMs === "number" ? payload.latencyMs : Date.now() - startedAt);
-      if (typeof payload.model === "string" && payload.model.length > 0) {
-        setModel(payload.model);
-      }
+          if (payload.usage) {
+            nextSession.lastUsage = payload.usage;
+            nextSession.cumulativeUsage = addUsage(nextSession.cumulativeUsage, payload.usage);
+          }
+
+          return nextSession;
+        }),
+      );
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : "Error inesperado";
       setError(message);
@@ -360,15 +478,36 @@ export default function Home() {
     setLanguage(nextLanguage);
   }
 
-  function handleResetSession(): void {
-    setMessages([]);
+  function handleSelectSession(sessionId: string): void {
+    setActiveSessionId(sessionId);
     setInput("");
     setError(null);
     setIsLoading(false);
-    setLastUsage(ZERO_USAGE);
-    setCumulativeUsage(ZERO_USAGE);
-    setLatencyMs(null);
-    setModel(DEFAULT_MODEL);
+  }
+
+  function handleCreateSession(): void {
+    const nextSession = createSession(language);
+    setSessions((prev) => [nextSession, ...prev]);
+    setActiveSessionId(nextSession.id);
+    setInput("");
+    setError(null);
+    setIsLoading(false);
+  }
+
+  function handleResetSession(): void {
+    if (sessions.length <= 1) {
+      const replacement = createSession(language);
+      setSessions([replacement]);
+      setActiveSessionId(replacement.id);
+    } else {
+      const remaining = sessions.filter((session) => session.id !== activeSessionId);
+      setSessions(remaining);
+      setActiveSessionId(remaining[0].id);
+    }
+
+    setInput("");
+    setError(null);
+    setIsLoading(false);
   }
 
   return (
@@ -384,8 +523,11 @@ export default function Home() {
             settingsTitle: copy.settingsTitle,
             themeLabel: copy.themeLabel,
             providerLabel: copy.providerLabel,
-            sessions: copy.sessions,
           }}
+          sessions={sessions.map((session) => ({ id: session.id, title: session.title }))}
+          activeSessionId={activeSessionId}
+          onSelectSession={handleSelectSession}
+          onCreateSession={handleCreateSession}
         />
         <ChatWindow
           messages={messages}

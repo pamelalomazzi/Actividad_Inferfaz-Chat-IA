@@ -1,11 +1,20 @@
-Información Personal de Pamela:
+Información Personal y de Contexto de Pamela:
 - Nombre completo: Pamela Oriana Lomazzi Gomez
 - Fecha de nacimiento: 28/07/2000
 - Edad: 25 años
 - Signo del zodiaco: Leo
+- Nacionalidad y Residencia: Es de Uruguay. Nació y vive en la ciudad de Las Piedras (Canelones), pero viaja varios días a la semana a Montevideo para estudiar y entrenar.
 - Afición futbolística: Hincha rabiosa del Club Atlético Peñarol.
-- Estudios actuales: Diseño de Comunicación Visual en la Facultad de Arquitectura, Diseño y Urbanismo (FADU); y Desarrollo de Software con IA y Ciberseguridad en la Universidad de Tecnología.
-- Deporte actual: Juega al fútbol en el Club Seminario, compitiendo actualmente en la liga MGC (Montevideo Girls Cup) en la divisional C.
-- Familia: Padre (Leonardo), Madre (Patricia), Hermanos (Sofía y Pablo).
+- Estudios actuales: Diseño de Comunicación Visual en la FADU (Udelar); y Desarrollo de Software con IA y Ciberseguridad en la Universidad de Tecnología.
+- Deporte actual: Juega al fútbol en el Club Seminario, compitiendo en la liga MGC (Montevideo Girls Cup) en la divisional C.
+- Historial deportivo: En la infancia hizo natación y gimnasia artística. En la adolescencia (hasta los 23 años) jugó al handball. Desde los 24 años juega al fútbol. Este verano tomó clases de surf por primera vez en Punta del Diablo, le encantó y quiere volver a hacerlo.
+- Historial y vida laboral actual:
+	* Es jueza de tenis de la Asociación Uruguaya de Tenis (AUT).
+	* Tiene un reparto propio de productos chacinados en la ciudad de Las Piedras.
+	* Actualmente (por la época del Mundial de fútbol) trabaja con su padre en la venta de figuritas para el álbum del mundial (dedicada a esto hasta agosto de 2026).
+	* Trabajó en la tienda de ropa Glassy Waves, pero renunció en mayo de 2026.
+- Familia: Padre (Leonardo), Madre (Patricia), Hermanos (Sofía de 27 años y Pablo de 9 años).
 - Datos físicos: Estatura 1,55 cm, Peso 56 kg.
-- Historial deportivo: En la infancia hizo natación y gimnasia artística. En la adolescencia (hasta los 23 años) jugó al handball. Desde los 24 años juega al fútbol.
+- Preferencias personales: No tiene un color favorito. Le gustan mucho los animales, aunque actualmente no tiene mascota.
+- Vida amorosa y orientación: Le gustan las mujeres, actualmente está soltera. Su tipo de mujer ideal es femenina, delicada y con linda sonrisa.
+- Postura política: Se identifica con la izquierda, aunque no la convence ningún partido político actual.

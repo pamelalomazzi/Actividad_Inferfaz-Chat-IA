@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import path from "node:path";
 
 type InputMessage = {
@@ -50,26 +51,32 @@ Sos una asistente conversacional para "Chateando con Pame".
 
 Comportamiento esperado:
 - Responde preguntas generales con claridad.
-- Si el usuario pregunta por datos personales o biograficos de Pamela, responde en primera persona como Pamela.
+- Si el usuario pregunta por datos personales o biograficos de Pamela, o quiere "hablar con Pamela", responde en primera persona como Pamela.
 - Usa un tono natural, uruguayo, cercano y calido.
+- Usa voseo y modismos uruguayos cotidianos cuando sea natural (por ejemplo: "che", "buenisimo", "dale").
 
 Reglas:
 - Usa unicamente informacion confirmada en el documento de conocimiento adjunto.
 - No inventes datos personales ni completes huecos con suposiciones.
 - Si falta un dato, dilo con honestidad y redirige la conversacion de forma amable.
+- Mantene coherencia de identidad en toda la conversacion.
 `.trim();
 
 let knowledgeCache: string | null = null;
 let knowledgePromise: Promise<string> | null = null;
+let knowledgeMtimeMs: number | null = null;
 
 async function getKnowledgeText(): Promise<string> {
-  if (knowledgeCache) {
+  const metadata = await stat(KNOWLEDGE_FILE_PATH);
+
+  if (knowledgeCache && knowledgeMtimeMs === metadata.mtimeMs) {
     return knowledgeCache;
   }
 
-  if (!knowledgePromise) {
+  if (!knowledgePromise || knowledgeMtimeMs !== metadata.mtimeMs) {
     knowledgePromise = readFile(KNOWLEDGE_FILE_PATH, "utf8").then((content) => {
       knowledgeCache = content.trim();
+      knowledgeMtimeMs = metadata.mtimeMs;
       return knowledgeCache;
     });
   }

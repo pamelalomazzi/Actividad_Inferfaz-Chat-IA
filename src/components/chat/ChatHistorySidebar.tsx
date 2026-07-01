@@ -1,5 +1,10 @@
 import { BrandMark } from "@/components/brand/BrandMark";
 
+type SessionListItem = {
+  id: string;
+  title: string;
+};
+
 type ChatHistorySidebarProps = {
   copy: {
     historyTitle: string;
@@ -8,12 +13,20 @@ type ChatHistorySidebarProps = {
     settingsTitle: string;
     themeLabel: string;
     providerLabel: string;
-    sessions: string[];
   };
+  sessions: SessionListItem[];
+  activeSessionId: string;
+  onSelectSession: (sessionId: string) => void;
+  onCreateSession: () => void;
 };
 
-export function ChatHistorySidebar({ copy }: ChatHistorySidebarProps) {
-  const sessions = copy.sessions;
+export function ChatHistorySidebar({
+  copy,
+  sessions,
+  activeSessionId,
+  onSelectSession,
+  onCreateSession,
+}: ChatHistorySidebarProps) {
 
   return (
     <aside className="border-r border-neutral-800/80 bg-black/60 p-4">
@@ -21,7 +34,10 @@ export function ChatHistorySidebar({ copy }: ChatHistorySidebarProps) {
         <BrandMark compact />
         <div className="mt-3 flex items-center justify-between">
           <h2 className="text-xs uppercase tracking-[0.22em] text-lime-300">{copy.historyTitle}</h2>
-          <button className="rounded-lg border border-lime-500/70 bg-lime-500/20 px-2 py-1 text-xs font-semibold text-lime-300 hover:bg-lime-500/30">
+          <button
+            onClick={onCreateSession}
+            className="rounded-lg border border-lime-500/70 bg-lime-500/20 px-2 py-1 text-xs font-semibold text-lime-300 hover:bg-lime-500/30"
+          >
             {copy.newButton}
           </button>
         </div>
@@ -29,17 +45,18 @@ export function ChatHistorySidebar({ copy }: ChatHistorySidebarProps) {
       </div>
 
       <ul className="space-y-2">
-        {sessions.map((session, idx) => (
-          <li key={session}>
+        {sessions.map((session) => (
+          <li key={session.id}>
             <button
+              onClick={() => onSelectSession(session.id)}
               className={[
                 "w-full rounded-xl border px-3 py-2 text-left text-sm transition",
-                idx === 0
+                session.id === activeSessionId
                   ? "border-lime-500/50 bg-lime-500/10 text-lime-100"
                   : "border-neutral-700 bg-neutral-900/70 text-neutral-300 hover:border-lime-500/50 hover:text-lime-200",
               ].join(" ")}
             >
-              {session}
+              {session.title}
             </button>
           </li>
         ))}
