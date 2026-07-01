@@ -1,13 +1,19 @@
+import { BrandMark } from "@/components/brand/BrandMark";
+
 export function ChatHistorySidebar() {
   const sessions = ["Sprint planning", "API debug", "Prompt tuning", "Night build"];
 
   return (
     <aside className="border-r border-neutral-800/80 bg-black/60 p-4">
-      <div className="mb-5 flex items-center justify-between">
-        <h2 className="text-xs uppercase tracking-[0.22em] text-lime-300">History</h2>
-        <button className="rounded-lg border border-lime-500/70 bg-lime-500/20 px-2 py-1 text-xs font-semibold text-lime-300 hover:bg-lime-500/30">
-          New
-        </button>
+      <div className="mb-6 border-b border-neutral-800/80 pb-4">
+        <BrandMark compact />
+        <div className="mt-3 flex items-center justify-between">
+          <h2 className="text-xs uppercase tracking-[0.22em] text-lime-300">History</h2>
+          <button className="rounded-lg border border-lime-500/70 bg-lime-500/20 px-2 py-1 text-xs font-semibold text-lime-300 hover:bg-lime-500/30">
+            New
+          </button>
+        </div>
+        <p className="mt-2 text-sm text-neutral-400">Nocturne AI console</p>
       </div>
 
       <ul className="space-y-2">

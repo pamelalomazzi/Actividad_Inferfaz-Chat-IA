@@ -1,4 +1,5 @@
 import type { KeyboardEvent } from "react";
+import { BrandMark } from "@/components/brand/BrandMark";
 import type { ChatMessage } from "@/components/chat/types";
 
 type ChatWindowProps = {
@@ -31,10 +32,12 @@ export function ChatWindow({
 
   return (
     <section className="flex min-h-screen flex-col border-x border-neutral-800/80 bg-neutral-950/85">
-      <header className="flex items-center justify-between border-b border-neutral-800/80 px-5 py-4 md:px-7">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-lime-300">Neon Nocturne</p>
-          <h1 className="text-lg font-semibold text-white md:text-xl">Chat Window</h1>
+      <header className="flex items-center justify-between border-b border-neutral-800/80 bg-black/25 px-5 py-4 backdrop-blur-sm md:px-7">
+        <div className="flex items-center gap-4">
+          <BrandMark />
+          <div className="hidden md:block">
+            <p className="text-sm text-neutral-400">Groq workspace for Llama 3 conversations</p>
+          </div>
         </div>
         <button
           onClick={onReset}

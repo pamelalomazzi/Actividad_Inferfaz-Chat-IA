@@ -10,7 +10,7 @@ export function MetricsPanel({ metrics }: MetricsPanelProps) {
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-sm uppercase tracking-[0.2em] text-neutral-300">Metrics</h2>
         <span className="rounded-full border border-lime-500/60 bg-lime-500/20 px-2 py-1 text-xs font-mono text-lime-300">
-          mock
+          live
         </span>
       </div>
 
